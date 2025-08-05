@@ -14,8 +14,20 @@ from flask import Flask
 # 🔑 Google Sheets через переменные окружения
 creds_json = os.getenv("GOOGLE_CREDENTIALS")
 creds_dict = json.loads(creds_json)
-creds = Credentials.from_service_account_info(creds_dict)
+
+scopes = [
+    "https://www.googleapis.com/auth/spreadsheets",
+    "https://www.googleapis.com/auth/drive"
+]
+
+scopes = [
+    "https://www.googleapis.com/auth/spreadsheets",
+    "https://www.googleapis.com/auth/drive"
+]
+
+creds = Credentials.from_service_account_info(creds_dict, scopes=scopes)
 client = gspread.authorize(creds)
+
 
 # 📄 открываем таблицу
 SHEET_ID = os.getenv("GOOGLE_SHEET_ID")
@@ -34,7 +46,7 @@ app = Flask(__name__)
 def home():
     return "Bot is running!"
 
-# Категории
+# 🏷️ Категории
 CATEGORIES = {
     "Еда": ["еда", "манты", "кафе", "обед", "продукты", "ужин"],
     "Транспорт": ["такси", "автобус", "бензин", "транспорт", "проезд"],
@@ -177,7 +189,6 @@ def add_or_auto(message):
     worksheet.append_row([today, category, amount, comment])
     bot.reply_to(message, f"✅ Запись: {category} — {amount} ₸ ({comment})")
 
-# Запуск Flask и бота
 if __name__ == "__main__":
     threading.Thread(target=lambda: bot.infinity_polling(), daemon=True).start()
     app.run(host="0.0.0.0", port=int(os.getenv("PORT", 5000)))
