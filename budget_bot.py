@@ -11,7 +11,14 @@ import schedule
 import calendar
 from flask import Flask
 
-# 🔑 Google Sheets через переменные окружения
+# Flask-заглушка для Render
+app = Flask(__name__)
+
+@app.route('/')
+def index():
+    return "Бот работает ✅"
+
+# 🔑 Подключение к Google Sheets через переменные окружения
 creds_json = os.getenv("GOOGLE_CREDENTIALS")
 creds_dict = json.loads(creds_json)
 
@@ -19,34 +26,20 @@ scopes = [
     "https://www.googleapis.com/auth/spreadsheets",
     "https://www.googleapis.com/auth/drive"
 ]
-
-scopes = [
-    "https://www.googleapis.com/auth/spreadsheets",
-    "https://www.googleapis.com/auth/drive"
-]
-
 creds = Credentials.from_service_account_info(creds_dict, scopes=scopes)
 client = gspread.authorize(creds)
 
-
-# 📄 открываем таблицу
+# 📄 Открываем таблицу
 SHEET_ID = os.getenv("GOOGLE_SHEET_ID")
 spreadsheet = client.open_by_key(SHEET_ID)
 
-# 🤖 Telegram Bot
+# 🤖 Подключение Telegram Bot
 TOKEN = os.getenv("TELEGRAM_TOKEN")
 bot = telebot.TeleBot(TOKEN)
 
 print("✅ Бот запущен. Жду сообщений...")
 
-# Flask-заглушка для Render
-app = Flask(__name__)
-
-@app.route('/')
-def home():
-    return "Bot is running!"
-
-# 🏷️ Категории
+# 🏷️ словарь категорий
 CATEGORIES = {
     "Еда": ["еда", "манты", "кафе", "обед", "продукты", "ужин"],
     "Транспорт": ["такси", "автобус", "бензин", "транспорт", "проезд"],
@@ -55,7 +48,8 @@ CATEGORIES = {
     "Другое": []
 }
 
-ALLOWED_USERS = [476791477, 1388487185]
+# 🔐 список разрешённых пользователей
+ALLOWED_USERS = [476791477, 1388487185]  # ты и Жасмин
 REPORT_CHAT_IDS = [476791477, 1388487185]
 
 def send_to_all(text):
@@ -189,6 +183,7 @@ def add_or_auto(message):
     worksheet.append_row([today, category, amount, comment])
     bot.reply_to(message, f"✅ Запись: {category} — {amount} ₸ ({comment})")
 
+# Запуск Flask + бота
 if __name__ == "__main__":
     threading.Thread(target=lambda: bot.infinity_polling(), daemon=True).start()
-    app.run(host="0.0.0.0", port=int(os.getenv("PORT", 5000)))
+    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 10000)))
