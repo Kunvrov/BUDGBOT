@@ -1,2 +1,8 @@
+# Игнорировать файлы с ключами и временные файлы
+service_account.json
+service_account.txt
+*.env
+__pycache__/
+.DS_Store
 service_account.json
 service_account.txt
