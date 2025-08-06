@@ -178,8 +178,8 @@ threading.Thread(target=keep_alive_ping, daemon=True).start()
 
 # === Запуск ===
 if __name__ == "__main__":
-    # запускаем бота только в основном процессе (во избежание 409 Conflict)
-    if os.environ.get("WERKZEUG_RUN_MAIN") == "true":
+    if not os.environ.get("BOT_ALREADY_RUNNING"):
+        os.environ["BOT_ALREADY_RUNNING"] = "1"
         threading.Thread(target=lambda: bot.infinity_polling(), daemon=True).start()
         print("🤖 Бот запущен параллельно с Flask")
 
