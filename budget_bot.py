@@ -188,10 +188,8 @@ def keep_alive_ping():
 threading.Thread(target=keep_alive_ping, daemon=True).start()
 
 # ======= Запуск =======
-@app.before_first_request
-def activate_bot():
-    threading.Thread(target=lambda: bot.infinity_polling(), daemon=True).start()
-    print("🤖 Бот запущен через Flask")
-
 if __name__ == "__main__":
+    threading.Thread(target=lambda: bot.infinity_polling(), daemon=True).start()
+    print("🤖 Бот запущен параллельно с Flask")
+
     app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 10000)))
