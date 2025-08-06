@@ -10,6 +10,7 @@ import time
 import schedule
 import calendar
 from flask import Flask
+import requests
 
 # Flask-заглушка для Render
 app = Flask(__name__)
@@ -37,7 +38,7 @@ spreadsheet = client.open_by_key(SHEET_ID)
 TOKEN = os.getenv("TELEGRAM_TOKEN")
 bot = telebot.TeleBot(TOKEN)
 
-print("✅ Бот запущен. Жду сообщений...")
+print("✅ Бот загружен, ждёт запуска Flask...")
 
 # 🏷️ словарь категорий
 CATEGORIES = {
@@ -49,7 +50,7 @@ CATEGORIES = {
 }
 
 # 🔐 список разрешённых пользователей
-ALLOWED_USERS = [476791477, 1388487185]  # ты и Жасмин
+ALLOWED_USERS = [476791477, 1388487185]
 REPORT_CHAT_IDS = [476791477, 1388487185]
 
 def send_to_all(text):
@@ -157,33 +158,40 @@ def add_or_auto(message):
         bot.reply_to(message, "⛔ У вас нет доступа к этому боту.")
         return
     print(f"📩 Получено сообщение: {message.text} от {message.chat.id}")
-    if message.text.startswith("/add"):
-        try:
-            parts = message.text.split(maxsplit=3)
-            category = parts[1]
-            amount = parts[2]
-            comment = parts[3] if len(parts) > 3 else ""
-        except:
-            bot.reply_to(message, "⚠️ Формат: /add Категория Сумма Комментарий")
+    try:
+        amount_match = re.search(r'\d+', message.text)
+        if not amount_match:
+            bot.reply_to(message, "⚠️ Укажи сумму.")
             return
-    else:
-        try:
-            amount_match = re.search(r'\d+', message.text)
-            if not amount_match:
-                bot.reply_to(message, "⚠️ Укажи сумму.")
-                return
-            amount = amount_match.group()
-            comment = message.text.replace(amount, "").strip()
-            category = detect_category(message.text)
-        except:
-            bot.reply_to(message, "⚠️ Не понял сообщение. Попробуй формат: /add Категория Сумма Комментарий")
-            return
+        amount = amount_match.group()
+        comment = message.text.replace(amount, "").strip()
+        category = detect_category(message.text)
+    except:
+        bot.reply_to(message, "⚠️ Не понял сообщение. Попробуй формат: /add Категория Сумма Комментарий")
+        return
     today = datetime.now().strftime("%d.%m.%Y")
     worksheet = get_current_worksheet()
     worksheet.append_row([today, category, amount, comment])
     bot.reply_to(message, f"✅ Запись: {category} — {amount} ₸ ({comment})")
 
-# Запуск Flask + бота
-if __name__ == "__main__":
+# ======= Keep-Alive Ping =======
+def keep_alive_ping():
+    while True:
+        try:
+            url = os.getenv("RENDER_URL", "https://budgbot.onrender.com")
+            requests.get(url)
+            print(f"🔄 Keep-alive ping {url}")
+        except Exception as e:
+            print(f"⚠️ Ошибка keep-alive: {e}")
+        time.sleep(600)
+
+threading.Thread(target=keep_alive_ping, daemon=True).start()
+
+# ======= Запуск =======
+@app.before_first_request
+def activate_bot():
     threading.Thread(target=lambda: bot.infinity_polling(), daemon=True).start()
+    print("🤖 Бот запущен через Flask")
+
+if __name__ == "__main__":
     app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 10000)))
