@@ -12,35 +12,32 @@ import calendar
 from flask import Flask
 import requests
 
-# Flask-заглушка для Render
 app = Flask(__name__)
 
 @app.route('/')
 def index():
     return "Бот работает ✅"
 
-# 🔑 Подключение к Google Sheets через переменные окружения
+# 🔐 Авторизация Google Sheets
 creds_json = os.getenv("GOOGLE_CREDENTIALS")
 creds_dict = json.loads(creds_json)
-
 scopes = [
     "https://www.googleapis.com/auth/spreadsheets",
     "https://www.googleapis.com/auth/drive"
 ]
 creds = Credentials.from_service_account_info(creds_dict, scopes=scopes)
 client = gspread.authorize(creds)
-
-# 📄 Открываем таблицу
 SHEET_ID = os.getenv("GOOGLE_SHEET_ID")
 spreadsheet = client.open_by_key(SHEET_ID)
 
-# 🤖 Подключение Telegram Bot
+# 🤖 Телеграм бот
 TOKEN = os.getenv("TELEGRAM_TOKEN")
 bot = telebot.TeleBot(TOKEN)
 
-print("✅ Бот загружен, ждёт запуска Flask...")
+# 🔒 Доступ
+ALLOWED_USERS = [476791477, 1388487185]
+REPORT_CHAT_IDS = [476791477, 1388487185]
 
-# 🏷️ словарь категорий
 CATEGORIES = {
     "Еда": ["еда", "манты", "кафе", "обед", "продукты", "ужин"],
     "Транспорт": ["такси", "автобус", "бензин", "транспорт", "проезд"],
@@ -48,10 +45,6 @@ CATEGORIES = {
     "Развлечения": ["кино", "игра", "театр", "развлечения"],
     "Другое": []
 }
-
-# 🔐 список разрешённых пользователей
-ALLOWED_USERS = [476791477, 1388487185]
-REPORT_CHAT_IDS = [476791477, 1388487185]
 
 def send_to_all(text):
     for chat_id in REPORT_CHAT_IDS:
@@ -71,13 +64,13 @@ def detect_category(text):
 def get_current_worksheet():
     month_name = datetime.now().strftime("%B")
     try:
-        worksheet = spreadsheet.worksheet(month_name)
+        return spreadsheet.worksheet(month_name)
     except gspread.exceptions.WorksheetNotFound:
-        worksheet = spreadsheet.add_worksheet(title=month_name, rows="1000", cols="10")
-        worksheet.append_row(["Дата", "Категория", "Сумма", "Комментарий"])
-    return worksheet
+        ws = spreadsheet.add_worksheet(title=month_name, rows="1000", cols="10")
+        ws.append_row(["Дата", "Категория", "Сумма", "Комментарий"])
+        return ws
 
-# ======= Автоотчёты =======
+# === Автоотчёты ===
 def send_daily_report():
     try:
         worksheet = get_current_worksheet()
@@ -114,7 +107,7 @@ def send_monthly_report():
     except Exception as e:
         send_to_all(f"⚠️ Ошибка в месячном отчёте: {e}")
 
-# ======= Планировщик =======
+# === Планировщик ===
 schedule.every().day.at("22:00").do(send_daily_report)
 schedule.every().sunday.at("22:30").do(send_weekly_report)
 schedule.every().day.at("23:59").do(
@@ -128,7 +121,7 @@ def schedule_checker():
 
 threading.Thread(target=schedule_checker, daemon=True).start()
 
-# ======= Команды =======
+# === Обработчики Telegram ===
 @bot.message_handler(commands=['id'])
 def send_id(message):
     bot.reply_to(message, f"Ваш chat_id: {message.chat.id}")
@@ -145,10 +138,7 @@ def report(message):
         all_records = worksheet.get_all_values()[1:]
         today_sum = sum(int(row[2]) for row in all_records if row[0] == today)
         month_sum = sum(int(row[2]) for row in all_records if month in row[0])
-        bot.reply_to(message,
-            f"📊 Отчёт:\n"
-            f"Сегодня ({today}) — {today_sum} ₸\n"
-            f"За месяц — {month_sum} ₸")
+        bot.reply_to(message, f"📊 Отчёт:\nСегодня ({today}) — {today_sum} ₸\nЗа месяц — {month_sum} ₸")
     except Exception as e:
         bot.reply_to(message, f"⚠️ Ошибка в /report: {e}")
 
@@ -157,7 +147,6 @@ def add_or_auto(message):
     if message.chat.id not in ALLOWED_USERS:
         bot.reply_to(message, "⛔ У вас нет доступа к этому боту.")
         return
-    print(f"📩 Получено сообщение: {message.text} от {message.chat.id}")
     try:
         amount_match = re.search(r'\d+', message.text)
         if not amount_match:
@@ -174,7 +163,7 @@ def add_or_auto(message):
     worksheet.append_row([today, category, amount, comment])
     bot.reply_to(message, f"✅ Запись: {category} — {amount} ₸ ({comment})")
 
-# ======= Keep-Alive Ping =======
+# === Keep-alive ping ===
 def keep_alive_ping():
     while True:
         try:
@@ -187,9 +176,11 @@ def keep_alive_ping():
 
 threading.Thread(target=keep_alive_ping, daemon=True).start()
 
-# ======= Запуск =======
+# === Запуск ===
 if __name__ == "__main__":
-    threading.Thread(target=lambda: bot.infinity_polling(), daemon=True).start()
-    print("🤖 Бот запущен параллельно с Flask")
+    # запускаем бота только в основном процессе (во избежание 409 Conflict)
+    if os.environ.get("WERKZEUG_RUN_MAIN") == "true":
+        threading.Thread(target=lambda: bot.infinity_polling(), daemon=True).start()
+        print("🤖 Бот запущен параллельно с Flask")
 
     app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 10000)))
